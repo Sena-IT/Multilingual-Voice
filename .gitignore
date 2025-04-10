@@ -1,0 +1,65 @@
+# macOS system files
+.DS_Store
+
+# venv
+.venv/
+
+# pycache
+__pycache__/
+
+# debug audio
+debug_audio/
+
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.pnpm-debug.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# VSCode
+.vscode/
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Logs
+logs/
+*.log
+
+# OS generated
+Thumbs.db
+Desktop.ini
+
+# Coverage and test
+coverage/
+*.cover
+*.pyc
+.cache/
+.nyc_output/
+
+# Git
+*.orig
+*.swp
+
+# IDEs
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Misc
+*.bak
+*.tmp
