@@ -14,6 +14,7 @@ from config.env import OPENAI_API_KEY, SARVAM_API_KEY
 from utils.constants import SYSTEM_INSTRUCTION, INITIAL_BOT_MESSAGE
 from utils.logging import setup_logging
 from services.sarvam.tts import SarvamTTSService
+# from services.sarvam.translation import SarvamTranslationService
 
 logger = setup_logging()
 
@@ -22,6 +23,7 @@ class BotService:
         self.transport = transport
         self.stt = self._create_stt()
         self.llm = self._create_llm()
+        # self.translation = self._create_translation()
         self.tts = self._create_tts()
         self.context = self._create_context()
         self.context_aggregator = self.llm.create_context_aggregator(self.context)
@@ -45,9 +47,14 @@ class BotService:
         return OpenAILLMService(
             api_key=OPENAI_API_KEY,
             model="gpt-4o-mini",
-            prompt="You will receive a transcript of the user's query. Respond in casual, colloquial Tamil as given in the example in system instruction.",
+            prompt="You will receive a transcript of the user's query in English. Respond with a clear and concise answer in English.",
             system_instruction=SYSTEM_INSTRUCTION,
         )
+    
+    # def _create_translation(self) -> SarvamTranslationService:
+    #     translation = SarvamTranslationService(api_key=SARVAM_API_KEY)
+    #     print(f"DEBUG: Created translation service: {translation}")
+    #     return translation
     
     def _create_tts(self) -> SarvamTTSService:
         return SarvamTTSService(
@@ -70,6 +77,7 @@ class BotService:
             self.stt,
             self.context_aggregator.user(),
             self.llm,
+            # self.translation,
             self.tts,
             self.transport.output(),
             self.context_aggregator.assistant(),

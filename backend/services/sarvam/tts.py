@@ -1,10 +1,10 @@
+from typing import AsyncGenerator, Optional
+import aiohttp
 import base64
 import io
 import os
 import re
-import requests
 import time
-from typing import AsyncGenerator, Optional
 
 from loguru import logger
 from pydub import AudioSegment
@@ -21,7 +21,7 @@ from pipecat.services.tts_service import TTSService
 
 class SarvamTTSService(TTSService):
     DEFAULT_SAMPLE_RATE = 24000  # Match WebRTC transport
-    SARVAM_API_SAMPLE_RATE = 22050  # Closest Sarvam-supported rate
+    SARVAM_API_SAMPLE_RATE = 24000  # Closest Sarvam-supported rate
 
     def __init__(
         self,
@@ -30,15 +30,19 @@ class SarvamTTSService(TTSService):
         voice: str = "meera",
         model: str = "bulbul:v1",
         sample_rate: Optional[int] = None,
-        target_language_code: str = "en-IN",
+        source_language_code: str = "en-IN",
+        target_language_code: str = "ta-IN",
         **kwargs,
     ):
         super().__init__(sample_rate=sample_rate or self.DEFAULT_SAMPLE_RATE, **kwargs)
         self._api_key = api_key
         self.set_model_name(model)
         self.set_voice(voice)
+        self._source_language_code = source_language_code
         self._target_language_code = target_language_code
-        self._endpoint = "https://api.sarvam.ai/text-to-speech"
+        self._tts_endpoint = "https://api.sarvam.ai/text-to-speech"
+        self._translate_endpoint = "https://api.sarvam.ai/translate"
+        self._session = None
         self._validate_voice(voice)
         self._validate_model(model)
 
@@ -56,10 +60,14 @@ class SarvamTTSService(TTSService):
         if model not in supported_models:
             raise ValueError(f"Model '{model}' is not supported. Choose from: {supported_models}")
 
-    async def set_model(self, model: str):
-        self._validate_model(model)
-        logger.info(f"Switching TTS model to: [{model}]")
-        self.set_model_name(model)
+    async def __aenter__(self):
+        self._session = aiohttp.ClientSession()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        if self._session:
+            await self._session.close()
+            self._session = None
 
     async def start(self, frame: StartFrame):
         await super().start(frame)
@@ -68,7 +76,7 @@ class SarvamTTSService(TTSService):
             logger.warning(
                 f"Sample rate mismatch: TTS ({self.sample_rate} Hz) vs Transport ({frame.audio_out_sample_rate} Hz)"
             )
-        if self.SARVAM_API_SAMPLE_RATE not in [8000, 16000, 22050]:
+        if self.SARVAM_API_SAMPLE_RATE not in [8000, 16000, 22050, 24000]:
             logger.error(f"Invalid Sarvam API sample rate: {self.SARVAM_API_SAMPLE_RATE}")
 
     async def run_tts(self, text: str) -> AsyncGenerator[Frame, None]:
@@ -76,40 +84,67 @@ class SarvamTTSService(TTSService):
             yield ErrorFrame("Input text exceeds 500 characters.")
             return
 
-        logger.debug(f"{self}: Generating TTS [{text}]")
+        logger.debug(f"{self}: Processing text [{text}]")
         await self.start_ttfb_metrics()
 
-        payload = {
-            "inputs": [text],
+        # Translation step
+        translate_payload = {
+            "input": text,
+            "source_language_code": self._source_language_code,
+            "target_language_code": self._target_language_code,
+            "speaker_gender": "Female",
+            "mode": "modern-colloquial"
+        }
+        headers = {"api-subscription-key": self._api_key}
+
+        try:
+            if self._session is None:
+                self._session = aiohttp.ClientSession()
+            async with self._session.post(self._translate_endpoint, json=translate_payload, headers=headers) as response:
+                if response.status != 200:
+                    error = await response.text()
+                    logger.error(f"{self} translation error (status: {response.status}, error: {error})")
+                    yield ErrorFrame(f"Translation error (status: {response.status}, error: {error})")
+                    return
+                data = await response.json()
+                translated_text = data["translated_text"]
+                logger.debug(f"{self}: Translated text [{translated_text}]")
+        except Exception as e:
+            logger.exception(f"{self} error during translation: {e}")
+            yield ErrorFrame(f"Error during translation: {str(e)}")
+            return
+
+        # TTS step
+        tts_payload = {
+            "inputs": [translated_text],
             "target_language_code": self._target_language_code,
             "speaker": self._voice_id,
             "model": self.model_name,
             "speech_sample_rate": self.SARVAM_API_SAMPLE_RATE,
             "enable_preprocessing": True
         }
-        headers = {"api-subscription-key": self._api_key}
 
         try:
-            response = requests.post(self._endpoint, json=payload, headers=headers)
-            if response.status_code != 200:
-                error = response.text
-                logger.error(f"{self} error getting audio (status: {response.status_code}, error: {error})")
-                yield ErrorFrame(f"Error getting audio (status: {response.status_code}, error: {error})")
-                return
+            async with self._session.post(self._tts_endpoint, json=tts_payload, headers=headers) as response:
+                if response.status != 200:
+                    error = await response.text()
+                    logger.error(f"{self} TTS error (status: {response.status}, error: {error})")
+                    yield ErrorFrame(f"Error getting audio (status: {response.status}, error: {error})")
+                    return
+                tts_data = await response.json()
+                audio_data = tts_data["audios"][0]
+                audio_bytes = base64.b64decode(audio_data)
 
-            audio_data = response.json()["audios"][0]
-            audio_bytes = base64.b64decode(audio_data)
-
-            # Save raw WAV with sanitized filename
+            # Save raw WAV for debugging
             timestamp = int(time.time() * 1000)
-            safe_text = re.sub(r'[^\w\s-]', '', text[:30].replace(" ", "_").replace("\n", "").replace("\t", ""))
+            safe_text = re.sub(r'[^\w\s-]', '', translated_text[:30].replace(" ", "_").replace("\n", "").replace("\t", ""))
             debug_wav_filename = f"debug_audio/sarvam_raw_{timestamp}_{safe_text}.wav"
             os.makedirs("debug_audio", exist_ok=True)
             with open(debug_wav_filename, "wb") as f:
                 f.write(audio_bytes)
             logger.info(f"Saved raw Sarvam AI audio to: {debug_wav_filename}")
 
-            # Convert WAV to PCM and upsample to 24000 Hz
+            # Convert WAV to PCM and upsample
             audio_segment = AudioSegment.from_wav(io.BytesIO(audio_bytes))
             audio_segment = audio_segment.set_channels(1)
             audio_segment = audio_segment.set_sample_width(2)
@@ -117,7 +152,7 @@ class SarvamTTSService(TTSService):
                 audio_segment = audio_segment.set_frame_rate(self.sample_rate)
             raw_audio = audio_segment.raw_data
 
-            await self.start_tts_usage_metrics(text)
+            await self.start_tts_usage_metrics(translated_text)
             yield TTSStartedFrame()
 
             CHUNK_SIZE = int(self.sample_rate * 0.02 * 2)  # 20 ms at 24000 Hz = 960 bytes
@@ -135,6 +170,11 @@ class SarvamTTSService(TTSService):
         except Exception as e:
             logger.exception(f"{self} error generating TTS: {e}")
             yield ErrorFrame(f"Error generating TTS: {str(e)}")
+
+    async def cleanup(self):
+        if self._session:
+            await self._session.close()
+            self._session = None
 
     def can_generate_metrics(self) -> bool:
         return True
