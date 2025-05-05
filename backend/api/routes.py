@@ -14,12 +14,13 @@ async def handle_offer(request: dict, background_tasks: BackgroundTasks):
     pc_id = request.get("pc_id")
     sdp = request["sdp"]
     sdp_type = request["type"]
+    language = request["language"]
     
     answer = await webrtc_service.handle_offer(sdp, sdp_type, pc_id)
     connection = webrtc_service.connections[answer["pc_id"]]
     
     transport = webrtc_service.create_transport(connection)
-    bot_service = BotService(transport)
+    bot_service = BotService(transport,language)
     background_tasks.add_task(bot_service.run)
     
     return answer 
