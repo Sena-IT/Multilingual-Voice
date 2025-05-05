@@ -4,4 +4,4 @@ uvicorn
 aiortc
 pipecat-ai[google,silero]
 opencv-python
-
+loguru
