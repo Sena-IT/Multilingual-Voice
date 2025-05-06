@@ -1,201 +1,185 @@
 import base64
 import json
-import typing
+from typing import Optional
 from loguru import logger
+from pipecat.serializers.base_serializer import FrameSerializer
 
+# ---- Pipecat frame imports ---------------------------------------------------
 from pipecat.frames.frames import (
-    AudioRawFrame,  # Correct import - not AudioFrame
     Frame,
+    AudioRawFrame,
+    BotStoppedSpeakingFrame,
     CancelFrame,
-    StartFrame,
-    TransportMessageUrgentFrame,
+    StartInterruptionFrame,
     TransportMessageFrame,
+    TransportMessageUrgentFrame,
     EndFrame,
 )
-from pipecat.serializers.base_serializer import FrameSerializer  # Correct import - not abstract_serializer
+
+# -----------------------------------------------------------------------------
 
 
 class PlivoFrameSerializer(FrameSerializer):
-    """Plivo-specific frame serializer for WebSocket communication"""
-    
+    """Serialize Pipecat frames to/from Plivo WebSocket messages."""
+
     def __init__(self, stream_sid: str = "", call_id: str = ""):
         """
-        Initialize the Plivo frame serializer.
-        
         Args:
-            stream_sid: The stream ID from Plivo's start event
-            call_id: The call ID from Plivo's start event
+            stream_sid: Stream ID from Plivo's <Stream> start event.
+            call_id:    Call ID from Plivo's <Stream> start event.
         """
         self._stream_sid = stream_sid
         self._call_id = call_id
         self._initialized = False
-    
+
+        # True while the caller is talking; drop bot-audio until bot actually stops.
+        self._mute_until_bot_stops = False
+
+    # -------------------------------------------------------------------------
+    # Required property
+    # -------------------------------------------------------------------------
     @property
     def type(self) -> str:
-        """
-        Required abstract property for FrameSerializer.
-        Returns the type of serializer.
-        """
         return "plivo"
-    
+
+    # -------------------------------------------------------------------------
+    # Helper to set IDs after we receive Plivo's “start” event
+    # -------------------------------------------------------------------------
     def set_stream_info(self, stream_sid: str, call_id: str):
-        """Update stream info after connection"""
         self._stream_sid = stream_sid
         self._call_id = call_id
         self._initialized = True
-        logger.debug(f"Plivo serializer initialized with stream_sid: {stream_sid}, call_id: {call_id}")
-    
-    async def serialize(self, frame: Frame) -> typing.Optional[str]:
+        logger.debug(
+            f"Plivo serializer initialized with stream_sid={stream_sid}, call_id={call_id}"
+        )
+
+    # -------------------------------------------------------------------------
+    # SERIALIZE  (Pipecat → Plivo WebSocket)
+    # -------------------------------------------------------------------------
+    async def serialize(self, frame: Frame) -> Optional[str]:
         """
-        Serialize a Frame to Plivo WebSocket format
-        
-        Args:
-            frame: Frame to serialize
-            
-        Returns:
-            JSON string for WebSocket message or None
+        Map Pipecat frames to Plivo WebSocket JSON strings.
+
+        * StartInterruptionFrame / CancelFrame → clearAudio + begin muting
+        * While muted → drop any AudioRawFrame from TTS
+        * BotStoppedSpeakingFrame → lift mute flag
+        * AudioRawFrame → playAudio
         """
-        result = None
-        
+
+        # 1️⃣  Interruption detected → flush Plivo & start muting
+        if isinstance(frame, (StartInterruptionFrame, CancelFrame)):
+            self._mute_until_bot_stops = True
+            message = {"event": "clearAudio", "streamId": self._stream_sid}
+            logger.debug(f"[Serializer] clearAudio → {message}")
+            return json.dumps(message)
+
+        # 2️⃣  While muted, discard any bot audio frames
+        if self._mute_until_bot_stops and isinstance(frame, AudioRawFrame):
+            logger.debug("[Serializer] Dropping bot audio during interruption")
+            return None
+
+        # 3️⃣  Bot finished speaking → un-mute
+        if isinstance(frame, BotStoppedSpeakingFrame):
+            self._mute_until_bot_stops = False
+            logger.debug("[Serializer] Bot stopped → un-mute")
+            return None  # control frame, nothing to send
+
+        # 4️⃣  Normal outbound audio → playAudio
         if isinstance(frame, AudioRawFrame):
-            # Convert audio frame to Plivo format
-            audio_bytes = frame.audio
-            if hasattr(audio_bytes, 'tobytes'):
-                audio_bytes = audio_bytes.tobytes()
-            
-            # Encode to base64
-            payload = base64.b64encode(audio_bytes).decode('utf-8')
-            
-            # Plivo expects playAudio event for outgoing audio
-            message = {
-                "event": "playAudio",
-                "media": {
-                    "contentType": "audio/x-l16",  # Plivo supports audio/x-l16
-                    "sampleRate": frame.sample_rate,
-                    "payload": payload
+            audio_bytes = (
+                frame.audio.tobytes() if hasattr(frame.audio, "tobytes") else frame.audio
+            )
+            payload = base64.b64encode(audio_bytes).decode("utf-8")
+            return json.dumps(
+                {
+                    "event": "playAudio",
+                    "media": {
+                        "contentType": "audio/x-l16",
+                        "sampleRate": frame.sample_rate,
+                        "payload": payload,
+                    },
                 }
-            }
-            
-            result = json.dumps(message)
-            logger.debug(f"Serialized audio frame: sample_rate={frame.sample_rate}, payload_length={len(payload)}")
-            
-        elif isinstance(frame, TransportMessageFrame) or isinstance(frame, TransportMessageUrgentFrame):
-            # Handle transport messages
-            if isinstance(frame.message, dict):
-                result = json.dumps(frame.message)
-            elif isinstance(frame.message, str):
-                result = frame.message
-            else:
-                logger.error(f"Unsupported transport message type: {type(frame.message)}")
-                
-        elif isinstance(frame, (EndFrame, CancelFrame)):
-            # Plivo doesn't have explicit hangup messages like Twilio
-            # The call ends when the WebSocket connection is closed
-            logger.debug(f"Frame type {type(frame).__name__} - connection will close")
-            result = None
-            
-        else:
-            logger.debug(f"Skipping serialization for unsupported frame type: {type(frame)}")
-        
-        return result
-    
-    async def deserialize(self, data: str) -> typing.Optional[Frame]:
+            )
+
+        # 5️⃣  Transport-level JSON frames — pass straight through
+        if isinstance(frame, (TransportMessageFrame, TransportMessageUrgentFrame)):
+            msg = frame.message
+            return json.dumps(msg) if isinstance(msg, dict) else msg
+
+        # 6️⃣  End of call — just close socket, no JSON needed
+        if isinstance(frame, EndFrame):
+            logger.debug("[Serializer] EndFrame → socket will close")
+            return None
+
+        # 7️⃣  Anything else is ignored
+        logger.debug(f"[Serializer] skipping unsupported frame type: {type(frame)}")
+        return None
+
+    # -------------------------------------------------------------------------
+    # DESERIALIZE  (Plivo WebSocket → Pipecat)
+    # -------------------------------------------------------------------------
+    async def deserialize(self, data: str) -> Optional[Frame]:
         """
-        Deserialize Plivo WebSocket message to Frame
-        
-        Args:
-            data: JSON string from Plivo WebSocket
-            
-        Returns:
-            Frame object or None
+        Convert Plivo WebSocket JSON messages to Pipecat frames.
+        Only 'media', 'start', 'stop', 'checkpoint', 'playedStream',
+        and 'clearedAudio' are handled; others are logged and ignored.
         """
         try:
             message = json.loads(data)
             event = message.get("event")
-            
-            logger.debug(f"Deserializing Plivo event: {event}")
-            
+
+            # -- Inbound audio -------------------------------------------------
             if event == "media":
-                # Extract audio data from Plivo format
                 media = message.get("media", {})
                 payload = media.get("payload", "")
-                
-                # Decode base64 audio
                 audio_data = base64.b64decode(payload)
-                
-                # Extract metadata
                 sample_rate = media.get("sampleRate", 8000)
-                track = media.get("track", "inbound")
-                timestamp = media.get("timestamp", "0")
-                chunk = media.get("chunk", 0)
-                
-                # Create AudioRawFrame
+                from pipecat.frames.frames import AudioRawFrame  # local import to avoid cycles
+
                 frame = AudioRawFrame(
                     audio=audio_data,
                     sample_rate=sample_rate,
-                    num_channels=1  # Plivo uses mono audio
+                    num_channels=1,
                 )
-                
-                # Add metadata
+                # Optional timestamp
+                timestamp = media.get("timestamp", "0")
                 frame.pts = int(timestamp) if timestamp else None
-                
-                logger.debug(f"Deserialized audio frame: track={track}, chunk={chunk}, "
-                           f"sample_rate={sample_rate}, size={len(audio_data)}")
-                
                 return frame
-                
-            elif event == "start":
-                # just pull out Plivo’s IDs and stash them—
-                # Pipecat will emit its own StartFrame for the pipeline.
-                sd  = message.get("start", {})
-                sid = sd.get("streamId")
-                cid = sd.get("callId")
-                if sid and cid:
-                    self.set_stream_info(sid, cid)
+
+            # -- Stream start --------------------------------------------------
+            if event == "start":
+                sd = message.get("start", {})
+                self.set_stream_info(sd.get("streamId", ""), sd.get("callId", ""))
                 logger.info(f"Plivo stream initialized: {sd}")
                 return None
-                
-            elif event == "stop":
-                # Let on_client_disconnected handle pipeline teardown
+
+            # -- Stream stop ---------------------------------------------------
+            if event == "stop":
                 logger.info("Plivo stream stopped")
                 return None
-                
-            elif event == "checkpoint":
-                # Handle checkpoint events (Plivo-specific)
-                checkpoint_data = {
-                    "streamId": message.get("streamId", ""),
-                    "name": message.get("name", "")
-                }
-                return TransportMessageFrame(message=checkpoint_data)
-                
-            elif event == "playedStream":
-                # Handle playedStream events (Plivo-specific)
-                played_data = {
-                    "streamId": message.get("streamId", ""),
-                    "name": message.get("name", "")
-                }
-                return TransportMessageFrame(message=played_data)
-                
-            else:
-                logger.debug(f"Unknown Plivo event: {event}")
-                
+
+            # -- Plivo control callbacks --------------------------------------
+            if event in {"checkpoint", "playedStream", "clearedAudio"}:
+                return TransportMessageFrame(message=message)
+
+            logger.debug(f"Unknown Plivo event: {event}")
             return None
-            
+
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode JSON: {e}")
-            return None
+            logger.error(f"Failed to decode Plivo JSON: {e}")
         except Exception as e:
             logger.error(f"Error deserializing Plivo message: {e}")
-            return None
-    
+
+        return None
+
+    # -------------------------------------------------------------------------
+    # Helper accessors
+    # -------------------------------------------------------------------------
     def get_stream_id(self) -> str:
-        """Get the current stream ID"""
         return self._stream_sid
-    
+
     def get_call_id(self) -> str:
-        """Get the current call ID"""
         return self._call_id
-    
+
     def is_initialized(self) -> bool:
-        """Check if the serializer has been initialized with stream info"""
         return self._initialized

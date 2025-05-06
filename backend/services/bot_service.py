@@ -29,6 +29,7 @@ from pipecat.services.gladia.config import (GladiaInputParams,
 from pipecat.services.together.llm import TogetherLLMService
 from pipecat.transcriptions.language import Language
 from services.plivo_frame_serializer import PlivoFrameSerializer
+from pipecat.frames.frames import CancelFrame
 
 
 from config.env import (
@@ -145,14 +146,20 @@ async def run_bot(websocket_client: WebSocket, stream_sid: str, call_id: str, te
         ),
     )
 
+
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
         # Start recording.
+        logger.debug("[Handler] on_client_connected fired")
         await audiobuffer.start_recording()
         
         # Kick off the conversation.
         messages.append({"role": "system", "content": "Please introduce yourself to the user."})
         await task.queue_frames([context_aggregator.user().get_context_frame()])
+
+        # await asyncio.sleep(5.0)
+        # logger.debug("[Test] queuing CancelFrame()")
+        # await task.queue_frames([CancelFrame()])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):

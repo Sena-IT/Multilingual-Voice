@@ -13,6 +13,7 @@ from starlette.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from services.plivo_frame_serializer import PlivoFrameSerializer
 
+
 logger.add(sys.stderr, level="DEBUG")
 
 app = FastAPI()
@@ -29,7 +30,6 @@ app.add_middleware(
 async def start_call():
     print("POST Plivo ML")
     return HTMLResponse(content=open("plivo/senabot.xml").read(), media_type="application/xml")
-
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
