@@ -1,0 +1,602 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+:root {
+  --primary-color: #007bff; /* Example: Professional Blue */
+  --secondary-color: #6c757d; /* Example: Gray */
+  --background-color: #f8f9fa; /* Light Gray Background */
+  --card-background: #ffffff; /* White Card Background */
+  --text-color: #343a40; /* Dark Gray Text */
+  --text-light: #6c757d; /* Lighter Text */
+  --success-color: #28a745; /* Green for mic */
+  --error-color: #dc3545; /* Red for errors/disconnect */
+  --border-color: #dee2e6; /* Light border */
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  --font-family: "Inter", sans-serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.App {
+  display: flex;
+  flex-direction: column; /* Stack main card and controls */
+  align-items: center;
+  gap: 30px; /* Space between card and controls */
+  width: 100%;
+  max-width: 800px; /* Limit overall width */
+}
+
+.main-content {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  align-items: flex-start; /* Align items at the top */
+}
+
+.interaction-card,
+.metrics-card {
+  background-color: var(--card-background);
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: all 0.3s ease-in-out;
+  flex: 1; /* Allow cards to take space */
+  min-height: 350px; /* Ensure cards have a minimum height */
+}
+
+.interaction-card {
+  gap: 25px; /* Space elements inside the card */
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin: 0 0 10px 0;
+  align-self: flex-start; /* Align title to the left */
+}
+
+.status-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 80px; /* Give space for animations */
+  width: 100%;
+  margin-bottom: 20px;
+  min-height: 80px; /* Ensure it has min-height even without content */
+}
+
+/* Simple dot animation for loading/waiting */
+.dots span {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: var(--secondary-color);
+  border-radius: 50%;
+  margin: 0 4px;
+  animation: dot-bounce 1.4s infinite ease-in-out both;
+}
+
+.dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+.dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+.dots span:nth-child(3) {
+  animation-delay: 0s;
+}
+.dots span:nth-child(4) {
+  animation-delay: 0.16s;
+}
+.dots span:nth-child(5) {
+  animation-delay: 0.32s;
+}
+
+@keyframes dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* Placeholder for bot speaking animation (e.g., waveform) */
+.speaking-animation {
+  /* Add styles for a waveform or other visual indicator here */
+  width: 60px;
+  height: 40px;
+  /* background: linear-gradient(var(--primary-color), var(--primary-color)) center / 100% 10px no-repeat; */
+  border: 1px solid var(--border-color); /* temporary placeholder */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-light);
+  font-size: 0.8rem;
+}
+
+.mic-button {
+  background-color: var(--success-color);
+  border: none;
+  border-radius: 50%;
+  width: 70px;
+  height: 70px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.mic-button:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+}
+
+.mic-button:active {
+  transform: scale(0.95);
+}
+
+.mic-button.disabled {
+  background-color: var(--secondary-color);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.mic-button svg {
+  color: white;
+  width: 32px;
+  height: 32px;
+}
+
+.metrics-card {
+  align-items: flex-start; /* Align content to the start */
+  justify-content: flex-start;
+}
+
+.metrics-toggle-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.3s ease;
+  margin-bottom: 20px; /* Space below the button */
+}
+
+.metrics-toggle-button:hover {
+  background-color: darken(var(--primary-color), 10%);
+}
+
+.stats-container {
+  width: 100%;
+  margin-top: 15px;
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+.controls-container {
+  display: flex;
+  justify-content: space-between; /* Push groups left and right */
+  align-items: center;
+  gap: 15px;
+  background-color: var(--card-background);
+  padding: 15px 25px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  width: 100%;
+  max-width: 800px; /* Match max-width */
+  box-sizing: border-box;
+}
+
+/* New: Container for left-side info (toggle/timer) */
+.connection-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  /* Timer will be pushed left by default */
+}
+
+/* New: Container for right-side buttons */
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+/* Remove old connect-button styles if they exist */
+.connect-button {
+  /* These styles are no longer used */
+  /* display: none; */
+}
+
+.control-button {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  color: var(--secondary-color);
+  transition: background-color 0.2s ease, color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.control-button:hover {
+  background-color: #e9ecef; /* Light hover effect */
+  border-color: #adb5bd;
+  color: var(--text-color);
+}
+
+.control-button.active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.control-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.timer {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  /* Removed margin-right: auto; as justify-content handles positioning */
+}
+
+/* Style for the disconnect button when active */
+.control-button.disconnect-active {
+  border-color: var(--error-color);
+}
+.control-button.disconnect-active:hover {
+  background-color: rgba(220, 53, 69, 0.1); /* Light red hover */
+  border-color: var(--error-color);
+}
+.control-button.disconnect-active svg {
+  color: var(--error-color); /* Icon color */
+}
+
+/* Basic Responsive Adjustments */
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .interaction-card,
+  .metrics-card {
+    width: 90%;
+    max-width: 500px; /* Max width on smaller screens */
+    min-height: auto; /* Adjust height */
+  }
+
+  .controls-container {
+    width: 90%;
+    max-width: 500px;
+  }
+
+  body {
+    padding: 10px;
+    align-items: flex-start; /* Align top on mobile */
+    padding-top: 20px;
+  }
+}
+
+/* === Transcription Area Styling === */
+.transcription-area {
+  width: 100%;
+  height: 100px; /* Adjust height as needed */
+  background-color: #f0f0f0; /* Light background for the area */
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 10px 15px;
+  overflow-y: auto; /* Add scroll if content overflows */
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--text-light);
+  display: flex;
+  flex-direction: column;
+  /* Additional styling for individual transcript lines can be added later */
+}
+
+.transcription-area p {
+  margin: 0;
+  font-style: italic;
+}
+
+/* === Bot Speaking Waveform Animation === */
+.speaking-animation.waveform {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end; /* Align bars to the bottom */
+  height: 40px; /* Match placeholder height */
+  width: 80px; /* Adjust width */
+  border: none; /* Remove previous border */
+  gap: 4px;
+}
+
+.speaking-animation.waveform div {
+  background-color: var(--primary-color);
+  width: 6px;
+  border-radius: 3px;
+  animation: waveform-animation 1.2s infinite ease-in-out;
+  height: 5px; /* Minimum height */
+}
+
+/* Stagger animation delays */
+.speaking-animation.waveform div:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.speaking-animation.waveform div:nth-child(2) {
+  animation-delay: 0.3s;
+}
+.speaking-animation.waveform div:nth-child(3) {
+  animation-delay: 0s;
+}
+.speaking-animation.waveform div:nth-child(4) {
+  animation-delay: 0.2s;
+}
+.speaking-animation.waveform div:nth-child(5) {
+  animation-delay: 0.4s;
+}
+
+@keyframes waveform-animation {
+  0%,
+  100% {
+    height: 5px;
+    opacity: 0.5;
+  }
+  50% {
+    height: 40px;
+    opacity: 1;
+  }
+}
+
+/* === User Speaking Pulse Animation === */
+.mic-button.speaking-pulse {
+  animation: mic-pulse 1s infinite ease-in-out;
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0px rgba(40, 167, 69, 0.5); /* --success-color with alpha */
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(40, 167, 69, 0.1);
+  }
+}
+
+/* === Metrics Card Placeholder Styling === */
+.metrics-placeholder {
+  margin-top: 20px;
+  color: var(--text-light);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 20px;
+}
+
+/* === Muted Button State === */
+.control-button.active-muted {
+  border-color: var(--secondary-color);
+  color: var(--secondary-color);
+  background-color: #e9ecef; /* Similar to hover */
+}
+
+/* === Visualizer Canvas Styling === */
+.waveform-canvas {
+  display: block; /* Make it a block element */
+  margin: 0 auto; /* Center it if needed within its container */
+}
+
+/* === Container for User Status (Visualizer or Text) === */
+.user-status-container {
+  height: 30px; /* Match visualizer height */
+  width: 100%; /* Take full width below mic */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px; /* Space above */
+}
+
+/* Styling for the mic status text when visualizer is hidden */
+.mic-status-text {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+/* Remove old waveform and pulse animations if they still exist */
+.speaking-animation.waveform,
+.speaking-animation.waveform div {
+  /* Remove styles if WaveformVisualizer is used instead */
+  animation: none;
+  background: none;
+  border: none;
+  width: auto;
+  height: auto;
+  gap: 0;
+}
+
+@keyframes waveform-animation {
+  /* Remove */
+}
+
+.mic-button.speaking-pulse {
+  animation: none; /* Remove pulse animation */
+}
+
+@keyframes mic-pulse {
+  /* Remove */
+}
+
+/* Add styles for the new language toggle switch */
+.language-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 15px; /* Add some space before the connect button */
+}
+
+.toggle-label {
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+
+/* The switch - the box around the slider */
+.language-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px; /* Adjust size as needed */
+  height: 24px; /* Adjust size as needed */
+}
+
+/* Hide default HTML checkbox */
+.language-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--error-color); /* Default background RED */
+  -webkit-transition: 0.4s;
+  transition: 0.4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px; /* Adjust size */
+  width: 18px; /* Adjust size */
+  left: 3px; /* Adjust position */
+  bottom: 3px; /* Adjust position */
+  background-color: white;
+  -webkit-transition: 0.4s;
+  transition: 0.4s;
+}
+
+input:checked + .slider {
+  background-color: var(
+    --primary-color
+  ); /* Color when checked (e.g., Tamil - Blue) */
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--primary-color);
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(20px); /* Adjust distance */
+  -ms-transform: translateX(20px);
+  transform: translateX(20px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 24px; /* Adjust for roundness */
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* Disabled state */
+.language-toggle-switch input:disabled + .slider {
+  background-color: #e0e0e0; /* Lighter grey */
+  cursor: not-allowed;
+}
+
+.language-toggle-switch input:disabled + .slider:before {
+  background-color: #bdbdbd; /* Darker grey circle */
+}
+
+.language-toggle-container input:disabled ~ .toggle-label {
+  color: #aaa; /* Dim labels when disabled */
+}
+
+.rtvi-metrics {
+  color: var(--text-color);
+  font-family: "Inter", sans-serif;
+}
+
+.metric-section {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--card-border);
+  padding-bottom: 8px;
+}
+
+.metric-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.metric-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.metric-label {
+  color: var(--text-color-secondary);
+}
+
+.metric-value {
+  font-weight: 500;
+  font-family: monospace;
+}
+
+.metric-value.connected {
+  color: var(--success-color);
+}
+
+.metric-value.disconnected {
+  color: var(--error-color);
+}
+
+.metric-group {
+  padding-left: 12px;
+  border-left: 2px solid var(--primary-color);
+  margin-left: 8px;
+}
