@@ -50,4 +50,6 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", "-v", action="count")
     args = parser.parse_args()
 
+    
+
     uvicorn.run(app, host=args.host, port=args.port) 
