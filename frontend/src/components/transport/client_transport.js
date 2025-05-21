@@ -1,8 +1,12 @@
 // frontend/src/transport/client_transport.js (updated)
 import React, { useState, useRef, useEffect } from "react";
+console.log(
+  "[ClientWebRTCTransport] REACT_APP_BACKEND_URL from process.env:",
+  process.env.REACT_APP_BACKEND_URL
+); // <-- ADD THIS LINE
 
 class ClientWebRTCTransport {
-  constructor(serverUrl = "http://localhost:7860") {
+  constructor(serverUrl = process.env.REACT_APP_BACKEND_URL || "") {
     this.serverUrl = serverUrl;
     this.pc = null;
     this.listeners = new Map();

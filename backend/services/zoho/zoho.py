@@ -1,9 +1,9 @@
 import logging
-import os
 import requests
 import httpx
 from fastapi import HTTPException
 from dotenv import load_dotenv
+from config.env import ZOHO_CRM_CLIENT_ID, ZOHO_CRM_CLIENT_SECRET, ZOHO_CRM_REFRESH_TOKEN, ZOHO_API_URL, ZOHO_AUTH_URL
 
 load_dotenv()
 
@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 def get_new_access_token():
     print("enter the get_new_access_token function")
-    url = "https://accounts.zoho.in/oauth/v2/token"
+    url = ZOHO_AUTH_URL
     data_1 = {
-        "refresh_token": os.getenv("ZOHO_REFRESH_TOKEN"),
-        "client_id": os.getenv("ZOHO_CRM_CLIENT_ID"),
-        "client_secret": os.getenv("ZOHO_CRM_CLIENT_SECRET"),
+        "refresh_token": ZOHO_CRM_REFRESH_TOKEN,
+        "client_id": ZOHO_CRM_CLIENT_ID,
+        "client_secret": ZOHO_CRM_CLIENT_SECRET,
         "grant_type": "refresh_token"
     }
 
@@ -70,7 +70,7 @@ async def send_lead_to_zoho(lead):
         ]
     }
 
-    zoho_api_url = os.getenv("ZOHO_API_URL")
+    zoho_api_url = ZOHO_API_URL
     if not zoho_api_url:
         raise HTTPException(status_code=500, detail="ZOHO_API_URL not configured")
 

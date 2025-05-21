@@ -25,6 +25,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "message": "Service is running"}
+
 
 # Include API routes
 app.include_router(router, prefix="/api")
