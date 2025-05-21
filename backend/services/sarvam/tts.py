@@ -27,7 +27,7 @@ class SarvamTTSService(TTSService):
         self,
         *,
         api_key: str,
-        voice: str = "meera",
+        voice: str = "Maitreyi",
         model: str = "bulbul:v1",
         sample_rate: Optional[int] = None,
         source_language_code: str = "en-IN",
@@ -41,7 +41,7 @@ class SarvamTTSService(TTSService):
         self._source_language_code = source_language_code
         self._target_language_code = target_language_code
         self._tts_endpoint = "https://api.sarvam.ai/text-to-speech"
-        self._translate_endpoint = "https://api.sarvam.ai/translate"
+        # self._translate_endpoint = "https://api.sarvam.ai/translate"
         self._session = None
         self._validate_voice(voice)
         self._validate_model(model)
@@ -87,36 +87,9 @@ class SarvamTTSService(TTSService):
         logger.debug(f"{self}: Processing text [{text}]")
         await self.start_ttfb_metrics()
 
-        # Translation step
-        translate_payload = {
-            "input": text,
-            "source_language_code": self._source_language_code,
-            "target_language_code": self._target_language_code,
-            "speaker_gender": "Female",
-            "mode": "modern-colloquial"
-        }
-        headers = {"api-subscription-key": self._api_key}
-
-        try:
-            if self._session is None:
-                self._session = aiohttp.ClientSession()
-            async with self._session.post(self._translate_endpoint, json=translate_payload, headers=headers) as response:
-                if response.status != 200:
-                    error = await response.text()
-                    logger.error(f"{self} translation error (status: {response.status}, error: {error})")
-                    yield ErrorFrame(f"Translation error (status: {response.status}, error: {error})")
-                    return
-                data = await response.json()
-                translated_text = data["translated_text"]
-                logger.debug(f"{self}: Translated text [{translated_text}]")
-        except Exception as e:
-            logger.exception(f"{self} error during translation: {e}")
-            yield ErrorFrame(f"Error during translation: {str(e)}")
-            return
-
         # TTS step
         tts_payload = {
-            "inputs": [translated_text],
+            "text": text,  # Use 'text' instead of 'inputs'
             "target_language_code": self._target_language_code,
             "speaker": self._voice_id,
             "model": self.model_name,
@@ -124,7 +97,11 @@ class SarvamTTSService(TTSService):
             "enable_preprocessing": True
         }
 
+        headers = {"api-subscription-key": self._api_key}
+
         try:
+            if self._session is None:
+                self._session = aiohttp.ClientSession()
             async with self._session.post(self._tts_endpoint, json=tts_payload, headers=headers) as response:
                 if response.status != 200:
                     error = await response.text()
@@ -137,7 +114,7 @@ class SarvamTTSService(TTSService):
 
             # Save raw WAV for debugging
             timestamp = int(time.time() * 1000)
-            safe_text = re.sub(r'[^\w\s-]', '', translated_text[:30].replace(" ", "_").replace("\n", "").replace("\t", ""))
+            safe_text = re.sub(r'[^\w\s-]', '', text[:30].replace(" ", "_").replace("\n", "").replace("\t", ""))
             debug_wav_filename = f"debug_audio/sarvam_raw_{timestamp}_{safe_text}.wav"
             os.makedirs("debug_audio", exist_ok=True)
             with open(debug_wav_filename, "wb") as f:
@@ -152,7 +129,7 @@ class SarvamTTSService(TTSService):
                 audio_segment = audio_segment.set_frame_rate(self.sample_rate)
             raw_audio = audio_segment.raw_data
 
-            await self.start_tts_usage_metrics(translated_text)
+            await self.start_tts_usage_metrics(text)
             yield TTSStartedFrame()
 
             CHUNK_SIZE = int(self.sample_rate * 0.02 * 2)  # 20 ms at 24000 Hz = 960 bytes
@@ -178,3 +155,14 @@ class SarvamTTSService(TTSService):
 
     def can_generate_metrics(self) -> bool:
         return True
+
+   
+
+def create_sarvam_tts() -> SarvamTTSService:
+        return SarvamTTSService(
+            api_key=os.getenv("SARVAM_API_KEY"),
+            voice="anushka",
+            model="bulbul:v2",
+            sample_rate=24000,
+            target_language_code="ta-IN"
+        )    

@@ -3,5 +3,6 @@ fastapi[all]
 uvicorn
 aiortc
 pipecat-ai[google,silero]
+pipecat-ai[all]
 opencv-python
 
