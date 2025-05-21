@@ -1,0 +1,13 @@
+{
+  "extends": [
+    "react-app" // Assuming Create React App or similar
+  ],
+  "rules": {
+    "no-unused-vars": "warn"
+  },
+  "settings": {
+    "react": {
+      "version": "detect" // Automatically detects React version
+    }
+  }
+}
