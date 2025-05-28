@@ -1,0 +1,2 @@
+When running through docker make sure to run the backend via 
+docker run -d -p 7850:7850 --network=host --name webrtc_backend --restart on-failure:5 webrtc_backend
